@@ -1,6 +1,12 @@
 # dl_instagram
 instagram download files
 
+
+Note
+============
+require requests
+
+
 Usage
 =====
 pip install requests
@@ -19,6 +25,4 @@ pip install requests
 
 
 
-Note
-============
-require requests
+
