@@ -110,8 +110,8 @@ class Instagram(object):
 
 		json_data = self.rquery(url_profile)
 
-		if not json_data["user"]["is_private"]:
-			if json_data['user']['media']['count']==0 :
+		if not json_data["graphql"]["user"]["is_private"]:
+			if json_data["graphql"]['user']['edge_owner_to_timeline_media']['count']==0 :
 				print("No posts")
 				return False
 			else:
@@ -124,7 +124,7 @@ class Instagram(object):
 				return False
 			else:
 				json_data = self.rquery(url_profile)
-				if json_data['user']['followed_by_viewer'] == False:
+				if json_data["graphql"]['user']['followed_by_viewer'] == False:
 					print("You don't have previliges to access "+self.profile+" profile")
 					sys.exit(1)
 				else:
@@ -170,32 +170,40 @@ class Instagram(object):
 					return f
 					break
 		
-	def download(self,jsondata):
+	def download(self,jsondata,page=False):
+		index_p="data"
+		if not page:
+			index_p="graphql"
+			user_id=jsondata[index_p]['user']['id']
 
-		collectingNodes = list(jsondata['user']['media']['nodes'])
+		collectingNodes = list(jsondata[index_p]['user']['edge_owner_to_timeline_media']['edges'])
+		
+
 		try:
 			if not len(collectingNodes) == 0:
 				for k in collectingNodes:
-					if k['__typename'] == 'GraphImage' and self.images :
-						imageurl = k['display_src']
-						filename = k['id']
+					if k['node']['__typename'] == 'GraphImage' and self.images :
+						imageurl = k['node']['display_url']
+						filename = k['node']['id']
 						self.download_file(imageurl,filename,'image')
-					elif k['__typename'] == 'GraphSidecar' :
-						self.download_array(k['code'])
-					elif k['__typename'] == 'GraphVideo' and self.videos:
-						self.download_video(k['code'])
+					elif k['node']['__typename'] == 'GraphSidecar' :
+						self.download_array(k['node']['shortcode'])
+					elif k['node']['__typename'] == 'GraphVideo' and self.videos:
+						self.download_video(k['node']['shortcode'])
 
 		except Exception:
 			pass
 
-		has_next = jsondata['user']['media']['page_info']
+		has_next = jsondata[index_p]['user']['edge_owner_to_timeline_media']['page_info']
 		has_next_page = has_next['has_next_page']
 		url3=self.url % self.profile
 		if has_next_page :
 			restart_cursor = has_next['end_cursor']
-			url_rewriting = url3+'&max_id='+str(restart_cursor)
+			timeline_media = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
+			'&variables=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{count}%2C%22after%22%3A%22{after}%22%7D'
+			url_rewriting=timeline_media.format(user_id=user_id, count=500,after=restart_cursor)
 			parsed_json = self.rquery(url_rewriting)
-			self.download(parsed_json)
+			self.download(parsed_json,True)
 
 
 	def download_hash(self,jsondata):
