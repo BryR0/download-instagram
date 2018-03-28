@@ -1,8 +1,6 @@
 #!/usr/bin/python
 #enconding: utf-8
 
-#!/usr/bin/python
-#enconding: utf-8
 
 # /_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/
 # _/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/_/
@@ -27,6 +25,8 @@
 import os,json,sys,time
 import argparse
 import requests
+import threading
+
 
 class Instagram(object):
 	def __init__(self,profile,login_user,login_password,media=3):
@@ -38,6 +38,8 @@ class Instagram(object):
 		self.login_status=False
 		self.images=True
 		self.videos =True
+		self.thread =True
+		self.has_next_page=True
 		self.s=requests.Session()
 		self.header = {
 			"User-Agent":"Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0"
@@ -64,13 +66,11 @@ class Instagram(object):
 			jsondata = self.check_hashtag()
 			if not jsondata ==False:
 				self.download_hash(jsondata)
-				print('\n\n************Download Compeleted************')
 
 		else:
 			jsondata= self.checkusername()
 			if not jsondata==False:
 				self.download(jsondata)
-				print('\n\n************Download Compeleted************')
 
 	def rquery(self,url,json=True,stream=False):
 		try:
@@ -185,23 +185,30 @@ class Instagram(object):
 					if k['node']['__typename'] == 'GraphImage' and self.images :
 						imageurl = k['node']['display_url']
 						filename = k['node']['id']
-						self.download_file(imageurl,filename,'image')
+						#self.download_file(imageurl,filename,'image')
+						self.thread = threading.Thread(target=self.download_file, args=(imageurl,filename,'image',))
+						self.thread.start()
 					elif k['node']['__typename'] == 'GraphSidecar' :
-						self.download_array(k['node']['shortcode'])
+						self.thread = threading.Thread(target=self.download_array, args=(k['node']['shortcode'],))
+						self.thread.start()
+						#self.download_array(k['node']['shortcode'])
 					elif k['node']['__typename'] == 'GraphVideo' and self.videos:
-						self.download_video(k['node']['shortcode'])
+						self.thread = threading.Thread(target=self.download_video, args=(k['node']['shortcode'],))
+						self.thread.start()
+						#self.download_video(k['node']['shortcode'])
+
 
 		except Exception:
 			pass
 
 		has_next = jsondata[index_p]['user']['edge_owner_to_timeline_media']['page_info']
-		has_next_page = has_next['has_next_page']
-		url3=self.url % self.profile
-		if has_next_page :
+		self.has_next_page = has_next['has_next_page']
+
+		if self.has_next_page :
 			restart_cursor = has_next['end_cursor']
-			timeline_media = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
+			new_url = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
 			'&variables=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{count}%2C%22after%22%3A%22{after}%22%7D'
-			url_rewriting=timeline_media.format(user_id=user_id, count=500,after=restart_cursor)
+			url_rewriting=new_url.format(user_id=user_id, count=500,after=restart_cursor)
 			parsed_json = self.rquery(url_rewriting)
 			self.download(parsed_json,True)
 
@@ -213,20 +220,22 @@ class Instagram(object):
 			post_tag=list(jsondata['graphql']['hashtag']['edge_hashtag_to_top_posts']['edges'])
 			total=jsondata['graphql']['hashtag']['edge_hashtag_to_media']['count']
 			restart_cursor=jsondata['graphql']['hashtag']['edge_hashtag_to_media']['page_info']['end_cursor']
-			has_next_page=jsondata['graphql']['hashtag']['edge_hashtag_to_media']['page_info']['has_next_page']
+			self.has_next_page=jsondata['graphql']['hashtag']['edge_hashtag_to_media']['page_info']['has_next_page']
 
 
 			for d in media_tag:
-				query = self.type_file(d['node']['shortcode'])
-				if query ==False:
-					continue
+				#query = self.type_file(d['node']['shortcode'])
+				self.thread = threading.Thread(target=self.type_file, args=(d['node']['shortcode'],))
+				self.thread.start()
+
 
 			for p in post_tag:
-				query = self.type_file(p['node']['shortcode'])
-				if query ==False:
-					continue
+				#query = self.type_file(p['node']['shortcode'])
+				self.thread = threading.Thread(target=self.type_file, args=(d['node']['shortcode'],))
+				self.thread.start()
 
-			if has_next_page :
+
+			if self.has_next_page :
 				nurl=self.url % self.profile
 				url_rewriting = nurl+'&max_id='+str(restart_cursor)
 				parsed_json = self.rquery(url_rewriting)
@@ -246,6 +255,7 @@ class Instagram(object):
 			if data:
 				file_type=data['graphql']['shortcode_media']['__typename']
 				file_url=data['graphql']['shortcode_media']
+				file_name=data['graphql']['shortcode_media']['id']
 
 				if file_type=='GraphVideo' and self.videos:
 					file_ext='video'
@@ -255,7 +265,7 @@ class Instagram(object):
 					file_ext='image'
 					url_file=file_url['display_url']
 
-		        query=self.download_file(url_file,code,file_ext)
+		        query=self.download_file(url_file,file_name,file_ext)
 		        if not query:
 		        	return False
 			else:
@@ -280,7 +290,7 @@ class Instagram(object):
 		count=0
 		file_ext= file_type=="video" and ".mp4" or ".jpg"
 
-		print("Downloading "+filename+file_ext)
+		print("\rDownloading "+filename+file_ext)
 		with open(self.folder+filename+file_ext,"wb") as f:
 			for chunk in r.iter_content(chunk_size=2048):
 				if chunk:
@@ -346,6 +356,10 @@ class Instagram(object):
 			return True
 		elif loginstatus['authenticated'] == False :
 			return False
+	def __del__(self):
+		if not self.has_next_page:
+			print('\n\n************Download Compeleted************')
+
 
 if __name__ == '__main__':
 	
