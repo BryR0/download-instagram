@@ -30,7 +30,10 @@ import threading
 
 class Instagram(object):
 	def __init__(self,profile,login_user,login_password,media=3):
-		self.url = "https://www.instagram.com/%s/?__a=1"
+		#self.url = "https://www.instagram.com/%s/?__a=1"
+		self.url = "https://www.instagram.com/%s/"
+		self.query_url = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
+			'&variables=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{count}%2C%22after%22%3A%22{after}%22%7D'
 		self.profile = profile
 		self.user_id = login_user
 		self.password = login_password
@@ -70,10 +73,10 @@ class Instagram(object):
 		else:
 			jsondata= self.checkusername()
 			if not jsondata==False:
+				print "llege awe"
 				self.download(jsondata)
 
 	def rquery(self,url,json=True,stream=False):
-
 		try:
 			reconnect=True;
 			count=0
@@ -108,28 +111,39 @@ class Instagram(object):
 
 		url_profile=self.url % self.profile
 		folder=self.folder
+		next_stage=False
 
-		json_data = self.rquery(url_profile)
+		if not self.login_status:
+			print("ups need login")
+			exit(1)
 
-		if not json_data["graphql"]["user"]["is_private"]:
-			if json_data["graphql"]['user']['edge_owner_to_timeline_media']['count']==0 :
-				print("No posts")
-				return False
+
+		check = self.rquery(url_profile,False).text
+
+		json_data=json.loads(check.split("window._sharedData = ")[1].split(";</script>")[0])['entry_data']['ProfilePage'][0]
+
+		if json_data["graphql"]['user']['edge_owner_to_timeline_media']['count']==0 :
+			print("No posts")
+			return False
+		else:
+
+			if json_data["graphql"]['user']['followed_by_viewer'] == False:
+				print("You don't have previliges to access "+self.profile+" profile")
+				sys.exit(1)
 			else:
 				self.creating_folder(folder)
-				return json_data
-		else:
-			if self.login_status==False:
-				print("Sorry, you are trying to access profile is PRIVATE...")
-				print('Login required')
-				return False
-			else:
-				if json_data["graphql"]['user']['followed_by_viewer'] == False:
-					print("You don't have previliges to access "+self.profile+" profile")
-					sys.exit(1)
-				else:
-					self.creating_folder(folder)
-					return json_data
+				next_stage=True
+
+		if next_stage:
+			user_id= str(json_data['graphql']['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id'])
+			restart_cursor=json_data['graphql']['user']['edge_owner_to_timeline_media']['page_info']['end_cursor']
+
+			query_check=self.query_url.format(user_id=user_id, count=50,after=restart_cursor)
+
+			newdata = self.rquery(query_check)
+			return newdata
+
+		return next_stage
 
 
 	def check_hashtag(self):
@@ -171,14 +185,11 @@ class Instagram(object):
 					break
 		
 	def download(self,jsondata,page=False):
-		index_p="data"
-		if not page:
-			index_p="graphql"
-			user_id=jsondata[index_p]['user']['id']
 
-		collectingNodes = list(jsondata[index_p]['user']['edge_owner_to_timeline_media']['edges'])
+		user_id=jsondata["data"]['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id']
+
+		collectingNodes = list(jsondata['data']['user']['edge_owner_to_timeline_media']['edges'])
 		
-
 		try:
 			if not len(collectingNodes) == 0:
 				for k in collectingNodes:
@@ -200,14 +211,13 @@ class Instagram(object):
 		except Exception:
 			pass
 
-		has_next = jsondata[index_p]['user']['edge_owner_to_timeline_media']['page_info']
+		has_next = jsondata['data']['user']['edge_owner_to_timeline_media']['page_info']
 		self.has_next_page = has_next['has_next_page']
 
 		if self.has_next_page :
 			restart_cursor = has_next['end_cursor']
-			new_url = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
-			'&variables=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{count}%2C%22after%22%3A%22{after}%22%7D'
-			url_rewriting=new_url.format(user_id=user_id, count=500,after=restart_cursor)
+
+			self.url_rewriting=new_url.format(user_id=user_id, count=500,after=restart_cursor)
 			parsed_json = self.rquery(url_rewriting)
 			self.download(parsed_json,True)
 
