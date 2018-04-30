@@ -1,5 +1,8 @@
 # dl_instagram
-instagram download files
+download Instagram images/videos
+1. hashtag
+2. profile 
+3. locations (coming soon)
 
 
 Note
