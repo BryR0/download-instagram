@@ -23,7 +23,6 @@
 #            +----------------------------+
 
 import os,json,sys,time,re
-import pprint
 import argparse
 import requests
 import threading
