@@ -22,7 +22,8 @@
 #            |            v.1.8           |
 #            +----------------------------+
 
-import os,json,sys,time
+import os,json,sys,time,re
+import pprint
 import argparse
 import requests
 import threading
@@ -38,6 +39,7 @@ class Instagram(object):
 		self.user_id = login_user
 		self.password = login_password
 		self.folder=""
+		self.profile_id=""
 		self.login_status=False
 		self.images=True
 		self.videos =True
@@ -73,7 +75,6 @@ class Instagram(object):
 		else:
 			jsondata= self.checkusername()
 			if not jsondata==False:
-				print "llege awe"
 				self.download(jsondata)
 
 	def rquery(self,url,json=True,stream=False):
@@ -135,13 +136,9 @@ class Instagram(object):
 				next_stage=True
 
 		if next_stage:
-			user_id= str(json_data['graphql']['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id'])
-			restart_cursor=json_data['graphql']['user']['edge_owner_to_timeline_media']['page_info']['end_cursor']
+			self.profile_id= str(json_data['graphql']['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id'])
 
-			query_check=self.query_url.format(user_id=user_id, count=50,after=restart_cursor)
-
-			newdata = self.rquery(query_check)
-			return newdata
+			return json_data
 
 		return next_stage
 
@@ -186,9 +183,12 @@ class Instagram(object):
 		
 	def download(self,jsondata,page=False):
 
-		user_id=jsondata["data"]['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id']
+		if page:
+			index_1='data'
+		else:
+			index_1='graphql'
 
-		collectingNodes = list(jsondata['data']['user']['edge_owner_to_timeline_media']['edges'])
+		collectingNodes = list(jsondata[index_1]['user']['edge_owner_to_timeline_media']['edges'])
 		
 		try:
 			if not len(collectingNodes) == 0:
@@ -211,13 +211,13 @@ class Instagram(object):
 		except Exception:
 			pass
 
-		has_next = jsondata['data']['user']['edge_owner_to_timeline_media']['page_info']
+		has_next = jsondata[index_1]['user']['edge_owner_to_timeline_media']['page_info']
 		self.has_next_page = has_next['has_next_page']
 
 		if self.has_next_page :
 			restart_cursor = has_next['end_cursor']
 
-			self.url_rewriting=new_url.format(user_id=user_id, count=500,after=restart_cursor)
+			url_rewriting=self.query_url.format(user_id=self.profile_id, count=50,after=restart_cursor)
 			parsed_json = self.rquery(url_rewriting)
 			self.download(parsed_json,True)
 
