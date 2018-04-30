@@ -22,9 +22,9 @@ pip install requests
 
 | command		| params                					 | example# 										 |
 |---------------|--------------------------------------------|-----------------------------------------------------|
-| -n            | #hastag or username        				 | python instagram.py -n #cat		 				 |
-| -t			| type: 1 jpg,2 video, 3 default(all)    | python instagram.py -n #cat -t 1					 |
-| -u -p			| username,password									 | python instagram.py -n #cat -u usename -p password |
+| -n            | #hastag or username        				 | python instagram.py -n "#cat"		 				 |
+| -t			| type: 1 jpg,2 video, 3 default(all)    | python instagram.py -n "#cat" -t 1					 |
+| -u -p			| username,password									 | python instagram.py -n "#cat" -u usename -p password |
 
 
 
