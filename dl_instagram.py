@@ -127,14 +127,17 @@ class Instagram(object):
 			return False
 		else:
 
-			if json_data["graphql"]['user']['followed_by_viewer'] == False:
-				print("You don't have previliges to access "+self.profile+" profile")
-				sys.exit(1)
+			if json_data["graphql"]['user']['is_private']:
+				if json_data["graphql"]['user']['followed_by_viewer'] == False:
+					print("You don't have previliges to access "+self.profile+" profile")
+					#sys.exit(1)
+				else:
+					next_stage=True
 			else:
-				self.creating_folder(folder)
 				next_stage=True
 
 		if next_stage:
+			self.creating_folder(folder)
 			self.profile_id= str(json_data['graphql']['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id'])
 
 			return json_data
