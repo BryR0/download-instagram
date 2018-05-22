@@ -100,7 +100,9 @@ class Instagram(object):
 						count=count+1
 						time.sleep(5)
 					else:
-						print "[+] conexion exede continue with next!"
+						print "[-] conexion exede..."
+						print "[-] instagram block conexion waiting 30M and re-download"
+						sys.exit(1)
 						reconnect=False
 			return reconnect
 
@@ -120,26 +122,26 @@ class Instagram(object):
 
 		check = self.rquery(url_profile,False).text
 
-		json_data=json.loads(check.split("window._sharedData = ")[1].split(";</script>")[0])['entry_data']['ProfilePage'][0]
+		json_data=json.loads(check.split("window._sharedData = ")[1].split(";</script>")[0])
+		id_tmp=json_data['config']['viewer']['id']
+		json_data=json_data['entry_data']['ProfilePage'][0]
+
+		self.profile_id= str(json_data['graphql']['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id'])
 
 		if json_data["graphql"]['user']['edge_owner_to_timeline_media']['count']==0 :
 			print("No posts")
 			return False
 		else:
 
-			if json_data["graphql"]['user']['is_private']:
-				if json_data["graphql"]['user']['followed_by_viewer'] == False:
-					print("You don't have previliges to access "+self.profile+" profile")
-					#sys.exit(1)
-				else:
-					next_stage=True
+			if json_data["graphql"]['user']['followed_by_viewer'] == False and id_tmp != self.profile_id:
+				print("You don't have previliges to access "+self.profile+" profile")
+				sys.exit(1)
 			else:
+				self.creating_folder(folder)
 				next_stage=True
 
 		if next_stage:
-			self.creating_folder(folder)
-			self.profile_id= str(json_data['graphql']['user']['edge_owner_to_timeline_media']['edges'][0]['node']['owner']['id'])
-
+			
 			return json_data
 
 		return next_stage
@@ -188,17 +190,16 @@ class Instagram(object):
 		if page:
 			index_1='data'
 		else:
-			index_1='graphql'
-
-		collectingNodes = list(jsondata[index_1]['user']['edge_owner_to_timeline_media']['edges'])
-		
+			index_1='graphql'		
 		try:
+			collectingNodes = list(jsondata[index_1]['user']['edge_owner_to_timeline_media']['edges'])
+			
 			if not len(collectingNodes) == 0:
 				for k in collectingNodes:
 					if k['node']['__typename'] == 'GraphImage' and self.images :
 						imageurl = k['node']['display_url']
 						filename = k['node']['id']
-						self.thread = threading.Thread(target=self.download_file, args=(imageurl,filename,))
+						self.thread = threading.Thread(target=self.download_file, args=(imageurl,filename,'.jpg',))
 						self.thread.start()
 
 					elif k['node']['__typename'] == 'GraphSidecar' :
@@ -207,7 +208,7 @@ class Instagram(object):
 
 
 					elif k['node']['__typename'] == 'GraphVideo' and self.videos:
-						self.thread = threading.Thread(target=self.download_video, args=(k['node']['shortcode'],))
+						self.thread = threading.Thread(target=self.download_video, args=(k['node']['shortcode'],'.mp4',))
 						self.thread.start()
 
 		except Exception:
@@ -256,7 +257,7 @@ class Instagram(object):
 		url2 =url_p % code
 		data=""
 		file_url=""
-		
+		ext=""
 		data = self.rquery(str(url2))
 
 		try:
@@ -267,11 +268,13 @@ class Instagram(object):
 
 				if file_type=='GraphVideo' and self.videos:
 					url_file=file_url['video_url']
+					ext=".mp4"
 
 				if file_type=='GraphImage' and self.images:
 					url_file=file_url['display_url']
+					ext=".jpg"
 
-		        query=self.download_file(url_file,file_name)
+		        query=self.download_file(url_file,file_name,ext)
 		        if not query:
 		        	return False
 			else:
@@ -279,39 +282,43 @@ class Instagram(object):
 		except Exception as e:
 			pass
 
-	def download_video(self,code):
+	def download_video(self,code,ext):
 		url_p='https://www.instagram.com/p/%s/?__a=1'
 		url2 = url_p % code
 
 		data2 = self.rquery(url2)
 
 		videourl = data2['graphql']['shortcode_media']
-		self.download_file(videourl['video_url'],videourl['id'])
+		self.thread = threading.Thread(target=self.download_file, args=(videourl['video_url'],videourl['id'],ext,))
+		self.thread.start()
+		#self.download_file(videourl['video_url'],videourl['id'],ext)
 
-	def download_file(self,file_url,filename):
+	def download_file(self,file_url,filename,ext):
 
 		r = self.rquery(file_url,False,True)
 		# int(r.headers.get('content-length', 0))
-
 		count=0
-		file_ext= file_url[-4:]
+		file_ext= ext
+		try:
 
-		print("\rDownloading "+filename+file_ext)
-		with open(self.folder+filename+file_ext,"wb") as f:
-			for chunk in r.iter_content(chunk_size=1024):
-				if chunk:
-					f.write(chunk)
-					f.flush()
-            		os.fsync(f.fileno())
-            	if not chunk:
-            		if count <=10:
-                		print "[-] conexion broken re-download started in 5 seconds"
-                		sys.sleep(5)
-                		count=count+1
-                		self.download_file(file_url,filename)
-                	else:
-                		return False
-			f.close()
+			print("\rDownloading "+filename+file_ext)
+			with open(self.folder+filename+file_ext,"wb") as f:
+				for chunk in r.iter_content(chunk_size=1024):
+					if chunk:
+						f.write(chunk)
+						f.flush()
+	            		os.fsync(f.fileno())
+				f.close()
+
+		except Exception as e:
+
+			if count <=10:
+				print "[-] conexion broken re-download "+filename+ext+" started in 5 seconds"
+				time.sleep(5)
+				count=count+1
+				self.download_file(file_url,filename,ext)
+			else:
+				return False
 
 	def download_array(self,code):
 		url1 = 'https://www.instagram.com/p/%s/?__a=1'
@@ -325,9 +332,13 @@ class Instagram(object):
 			i = 0
 			while k :
 				if fileurl[i]['node']['__typename'] == "GraphVideo" and self.videos:
-					self.download_file(fileurl[i]['node']['video_url'],fileurl[i]['node']['id'])
+					self.thread = threading.Thread(target=self.download_file, args=(fileurl[i]['node']['video_url'],fileurl[i]['node']['id'],'.mp4',))
+					self.thread.start()
+					#self.download_file(fileurl[i]['node']['video_url'],fileurl[i]['node']['id'],'.mp4')
 				elif fileurl[i]['node']['__typename'] == "GraphImage" and self.images:
-					self.download_file(fileurl[i]['node']['display_url'],fileurl[i]['node']['id'])
+					self.thread = threading.Thread(target=self.download_file, args=(fileurl[i]['node']['display_url'],fileurl[i]['node']['id'],'.jpg',))
+					self.thread.start()
+					#self.download_file(fileurl[i]['node']['display_url'],fileurl[i]['node']['id'],'.jpg')
 				i = i+1
 				k = k+1
 		except IndexError:
