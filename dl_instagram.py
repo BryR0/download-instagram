@@ -34,8 +34,10 @@ class Instagram(object):
 		self.url = "https://www.instagram.com/%s/"
 		self.query_url = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
 			'&variables=%7B%22id%22%3A%22{user_id}%22%2C%22first%22%3A{count}%2C%22after%22%3A%22{after}%22%7D'
-		self.profile = profile
+		self.url_history = 'https://www.instagram.com/graphql/query/?query_hash=45246d3fe16ccc6577e0bd297a5db1ab' \
+			'&variables=%7B%22reel_ids%22%3A%5B{0}%5D%2C%22tag_names%22%3A%5B{1}%5D%2C%22location_ids%22%3A%5B%5D%2C%22highlight_reel_ids%22%3A%5B%5D%2C%22precomposed_overlay%22%3Afalse%7D'
 		self.user_id = login_user
+		self.profile = profile
 		self.password = login_password
 		self.folder=""
 		self.profile_id=""
@@ -69,11 +71,12 @@ class Instagram(object):
 			self.url='https://www.instagram.com/explore/tags/%s/?__a=1'
 			jsondata = self.check_hashtag()
 			if not jsondata ==False:
+				self.history(True)
 				self.download_hash(jsondata)
-
 		else:
 			jsondata= self.checkusername()
 			if not jsondata==False:
+				self.history()
 				self.download(jsondata)
 
 	def rquery(self,url,json=True,stream=False):
@@ -251,6 +254,32 @@ class Instagram(object):
 				parsed_json = self.rquery(url_rewriting)
 				self.download_hash(parsed_json)
 		return False
+
+	def history(self,hou=False):
+
+		if hou:
+			url_history=self.url_history.format("","%22"+self.profile+"%22")
+		else:
+			url_history=self.url_history.format("%22"+self.profile_id+"%22","")
+
+		jsondata = self.rquery(str(url_history))
+		
+		try:
+			data = jsondata['data']['reels_media'][0]
+			
+			if data['items']:
+
+				for d in data['items']:
+
+					if d["__typename"] == "GraphStoryVideo":
+						self.thread = threading.Thread(target=self.download_file, args=(d["video_resources"][1]["src"],d["id"],".mp4"))
+						self.thread.start()
+
+					if d["__typename"] == "GraphStoryImage":
+						self.thread = threading.Thread(target=self.download_file, args=(d["display_resources"][2]["src"],d["id"],".jpg"))
+						self.thread.start()
+		except Exception:
+			pass
 
 	def type_file(self,code):
 		url_p="https://www.instagram.com/p/%s/?__a=1"
