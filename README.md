@@ -24,6 +24,7 @@ pip install requests
 |---------------|--------------------------------------------|-----------------------------------------------------|
 | -n            | #hastag or username        				 | python instagram.py -n "#cat"		 				 |
 | -t			| type: 1 jpg,2 video, 3 default(all)    | python instagram.py -n "#cat" -t 1					 |
+| -H			| only download history True     | python instagram.py -n "#cat" -H True					 |
 | -u -p			| username,password									 | python instagram.py -n "#cat" -u usename -p password |
 
 
