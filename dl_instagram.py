@@ -26,10 +26,11 @@ import os,json,sys,time,re
 import argparse
 import requests
 import threading
+from pprint import pprint
 
 
 class Instagram(object):
-	def __init__(self,profile,login_user,login_password,media=3):
+	def __init__(self,profile,login_user,login_password,media=3,history=False):
 		#self.url = "https://www.instagram.com/%s/?__a=1"
 		self.url = "https://www.instagram.com/%s/"
 		self.query_url = 'https://www.instagram.com/graphql/query/?query_hash=472f257a40c653c64c666ce877d59d2b' \
@@ -38,8 +39,9 @@ class Instagram(object):
 			'&variables=%7B%22reel_ids%22%3A%5B{0}%5D%2C%22tag_names%22%3A%5B{1}%5D%2C%22location_ids%22%3A%5B%5D%2C%22highlight_reel_ids%22%3A%5B%5D%2C%22precomposed_overlay%22%3Afalse%7D'
 		self.user_id = login_user
 		self.profile = profile
+		self._history = history
 		self.password = login_password
-		self.folder=""
+		self.folder="media"
 		self.profile_id=""
 		self.login_status=False
 		self.images=True
@@ -59,7 +61,7 @@ class Instagram(object):
 			self.images = False
 
 	def insta(self):
-		self.folder=self.profile
+		self.folder = self.profile
 		if self.user_id !='' and self.password !='':
 			login=self.login()
 			if login==False:
@@ -71,13 +73,16 @@ class Instagram(object):
 			self.url='https://www.instagram.com/explore/tags/%s/?__a=1'
 			jsondata = self.check_hashtag()
 			if not jsondata ==False:
+				if not self._history:
+					self.download_hash(jsondata)
 				self.history(True)
-				self.download_hash(jsondata)
 		else:
 			jsondata= self.checkusername()
 			if not jsondata==False:
+				if not self._history:
+					self.download(jsondata)
 				self.history()
-				self.download(jsondata)
+
 
 	def rquery(self,url,json=True,stream=False):
 		try:
@@ -173,12 +178,13 @@ class Instagram(object):
 			return False
 
 
-	def creating_folder(self,folder):
+	def creating_folder(self,folder,RW=True):
 
 		if not os.path.exists(folder):
 			print("Creating "+folder+" folder...")
 			os.makedirs(folder)
-			self.folder =folder+"/"
+			if RW:
+				self.folder = folder+"/"
 			return True
 		else:
 			for i in range(1,100):			
@@ -200,9 +206,7 @@ class Instagram(object):
 			if not len(collectingNodes) == 0:
 				for k in collectingNodes:
 					if k['node']['__typename'] == 'GraphImage' and self.images :
-						imageurl = k['node']['display_url']
-						filename = k['node']['id']
-						self.thread = threading.Thread(target=self.download_file, args=(imageurl,filename,'.jpg',))
+						self.thread = threading.Thread(target=self.download_file, args=(k['node']['display_url'],k['node']['id'],'.jpg',))
 						self.thread.start()
 
 					elif k['node']['__typename'] == 'GraphSidecar' :
@@ -256,7 +260,7 @@ class Instagram(object):
 		return False
 
 	def history(self,hou=False):
-
+		self.creating_folder(self.folder+"history",False)
 		if hou:
 			url_history=self.url_history.format("","%22"+self.profile+"%22")
 		else:
@@ -272,11 +276,11 @@ class Instagram(object):
 				for d in data['items']:
 
 					if d["__typename"] == "GraphStoryVideo":
-						self.thread = threading.Thread(target=self.download_file, args=(d["video_resources"][1]["src"],d["id"],".mp4"))
+						self.thread = threading.Thread(target=self.download_file, args=(d["video_resources"][1]["src"],"history/"+d["id"],".mp4"))
 						self.thread.start()
 
 					if d["__typename"] == "GraphStoryImage":
-						self.thread = threading.Thread(target=self.download_file, args=(d["display_resources"][2]["src"],d["id"],".jpg"))
+						self.thread = threading.Thread(target=self.download_file, args=(d["display_resources"][2]["src"],"history/"+d["id"],".jpg"))
 						self.thread.start()
 		except Exception:
 			pass
@@ -286,6 +290,7 @@ class Instagram(object):
 		url2 =url_p % code
 		data=""
 		file_url=""
+		url_file=""
 		ext=""
 		data = self.rquery(str(url2))
 
@@ -320,7 +325,6 @@ class Instagram(object):
 		videourl = data2['graphql']['shortcode_media']
 		self.thread = threading.Thread(target=self.download_file, args=(videourl['video_url'],videourl['id'],ext,))
 		self.thread.start()
-		#self.download_file(videourl['video_url'],videourl['id'],ext)
 
 	def download_file(self,file_url,filename,ext):
 
@@ -330,7 +334,7 @@ class Instagram(object):
 		file_ext= ext
 		try:
 
-			print("\rDownloading "+filename+file_ext)
+			print("\rDownloading "+filename.replace("history/", "")+file_ext)
 			with open(self.folder+filename+file_ext,"wb") as f:
 				for chunk in r.iter_content(chunk_size=1024):
 					if chunk:
@@ -363,11 +367,11 @@ class Instagram(object):
 				if fileurl[i]['node']['__typename'] == "GraphVideo" and self.videos:
 					self.thread = threading.Thread(target=self.download_file, args=(fileurl[i]['node']['video_url'],fileurl[i]['node']['id'],'.mp4',))
 					self.thread.start()
-					#self.download_file(fileurl[i]['node']['video_url'],fileurl[i]['node']['id'],'.mp4')
+
 				elif fileurl[i]['node']['__typename'] == "GraphImage" and self.images:
 					self.thread = threading.Thread(target=self.download_file, args=(fileurl[i]['node']['display_url'],fileurl[i]['node']['id'],'.jpg',))
 					self.thread.start()
-					#self.download_file(fileurl[i]['node']['display_url'],fileurl[i]['node']['id'],'.jpg')
+
 				i = i+1
 				k = k+1
 		except IndexError:
@@ -413,6 +417,7 @@ if __name__ == '__main__':
 	parser.add_argument('-p', action="store", dest="login_password",help='Password')
 	parser.add_argument('-n', action="store", dest="profilename",help='nombre del perfil a descargar')
 	parser.add_argument('-t', action="store", dest="type",default=3,help='file type: 1=image,2=video,3(default)=all')
+	parser.add_argument('-H', action="store", dest="history",default=False,help='only history True or False')
 	results = parser.parse_args()
 
 	if len(sys.argv)==1 or results.profilename=='':
@@ -421,5 +426,5 @@ if __name__ == '__main__':
 
 	
 	if len(sys.argv)>1:	
-		start=Instagram(results.profilename,results.login_user,results.login_password,results.type)
+		start=Instagram(results.profilename,results.login_user,results.login_password,results.type,results.history)
 		start.insta()
