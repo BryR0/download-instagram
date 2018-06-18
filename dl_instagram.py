@@ -260,7 +260,7 @@ class Instagram(object):
 		return False
 
 	def history(self,hou=False):
-		self.creating_folder(self.folder+"history",False)
+
 		if hou:
 			url_history=self.url_history.format("","%22"+self.profile+"%22")
 		else:
@@ -270,11 +270,11 @@ class Instagram(object):
 		
 		try:
 			data = jsondata['data']['reels_media'][0]
-			
+			self.creating_folder(self.folder+"history",False)
+
 			if data['items']:
-
 				for d in data['items']:
-
+					
 					if d["__typename"] == "GraphStoryVideo":
 						self.thread = threading.Thread(target=self.download_file, args=(d["video_resources"][1]["src"],"history/"+d["id"],".mp4"))
 						self.thread.start()
